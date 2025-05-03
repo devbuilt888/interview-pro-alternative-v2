@@ -1,0 +1,67 @@
+.floating-character-model {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  animation: float-around 20s infinite ease-in-out;
+}
+
+.floating-model {
+  transition: all 0.3s ease;
+  animation: pulse 4s infinite ease-in-out;
+}
+
+.floating-character-model:hover .floating-model {
+  transform: scale(1.2);
+}
+
+@keyframes float-around {
+  0%, 100% {
+    transform: translate(-50%, -50%);
+  }
+  25% {
+    transform: translate(-50%, -50%) translate(100px, -80px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translate(50px, 120px);
+  }
+  75% {
+    transform: translate(-50%, -50%) translate(-120px, 30px);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+/* Special styling for enlarged ni model */
+.ni-model-enlarged {
+  z-index: 10; /* Appear above other models */
+}
+
+.ni-model-enlarged .floating-model {
+  filter: drop-shadow(0 0 30px rgba(29, 91, 225, 0.8));
+  opacity: 1 !important;
+}
+
+.ni-model-enlarged:hover .floating-model {
+  transform: scale(1.1); /* Smaller scale on hover since it's already large */
+}
+
+/* Adjustments for smaller screens */
+@media (max-width: 768px) {
+  .floating-character-model {
+    display: none;
+  }
+  
+  /* Show only the first two on mobile */
+  .floating-character-model:nth-child(1),
+  .floating-character-model:nth-child(2) {
+    display: block;
+    transform: scale(0.7) translate(-50%, -50%);
+  }
+} 

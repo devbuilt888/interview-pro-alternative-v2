@@ -1,0 +1,155 @@
+.message-bubble {
+  max-width: 70%;
+  padding: 10px 15px;
+  border-radius: 18px;
+  margin-bottom: 8px;
+  position: relative;
+  word-wrap: break-word;
+  transition: all 0.3s ease;
+  cursor: default;
+}
+
+.message-other {
+  background-color: rgba(245, 245, 255, 0.95);
+  border: 1px solid rgba(26, 35, 126, 0.2);
+  border-bottom-left-radius: 4px;
+  align-self: flex-start;
+  color: #333333;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.message-user {
+  background-color: rgba(26, 35, 126, 0.9);
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+  align-self: flex-end;
+  box-shadow: 0 2px 5px rgba(26, 35, 126, 0.2);
+}
+
+.message-content {
+  margin-bottom: 4px;
+  line-height: 1.5;
+  position: relative;
+  font-weight: 400;
+}
+
+.message-content strong {
+  font-weight: 600;
+  color: #1a237e;
+}
+
+.message-user .message-content strong {
+  color: #ffffff;
+}
+
+.message-tooltip {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 10px);
+  background-color: var(--neutral-dark);
+  color: var(--white);
+  padding: 10px;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.9rem;
+  min-width: 200px;
+  max-width: 250px;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  animation: fadeIn 0.3s ease-in;
+  width: max-content;
+}
+
+/* Add tooltip arrow */
+.message-tooltip::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: -6px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 6px solid var(--neutral-dark);
+}
+
+/* For user messages, position tooltip on the left */
+.message-user .message-tooltip {
+  left: auto;
+  right: calc(100% + 10px);
+}
+
+.message-user .message-tooltip::before {
+  left: auto;
+  right: -6px;
+  border-right: none;
+  border-left: 6px solid var(--neutral-dark);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.message-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+}
+
+.message-time {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.message-status {
+  font-size: 0.8rem;
+}
+
+.message-status-sent {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.message-status-delivered {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.message-status-read {
+  color: #4CAF50;
+}
+
+.message-translation-indicator {
+  font-size: 0.8rem;
+  margin-left: 4px;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.message-bubble:hover .message-translation-indicator {
+  opacity: 1;
+}
+
+/* Responsive adjustments for small screens */
+@media (max-width: 768px) {
+  .message-tooltip {
+    position: fixed;
+    top: auto;
+    bottom: 75px;
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    width: auto;
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+  }
+  
+  .message-tooltip::before {
+    display: none;
+  }
+  
+  .message-user .message-tooltip {
+    left: 10px;
+    right: 10px;
+  }
+} 

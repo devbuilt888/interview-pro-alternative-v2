@@ -1,0 +1,57 @@
+.chinese-character-model {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  transition: transform 0.3s ease;
+  margin: 15px;
+  max-width: 300px;
+}
+
+.chinese-character-model:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+}
+
+.character-info {
+  text-align: center;
+  margin-bottom: 15px;
+  width: 100%;
+}
+
+.character {
+  font-size: 3rem;
+  color: var(--primary-color);
+  margin-bottom: 5px;
+}
+
+.pinyin {
+  font-size: 1.2rem;
+  color: var(--secondary-color);
+  margin-bottom: 5px;
+}
+
+.meaning {
+  font-size: 1rem;
+  color: var(--neutral-medium);
+}
+
+.character-model {
+  border: 1px solid rgba(245, 198, 66, 0.3);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .chinese-character-model {
+    max-width: 100%;
+    padding: 15px;
+  }
+  
+  .character {
+    font-size: 2.5rem;
+  }
+} 

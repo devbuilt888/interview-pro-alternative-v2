@@ -1,0 +1,140 @@
+.orbital-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2; /* Above the background pattern but below the chat */
+  overflow: hidden;
+  opacity: 0.7; /* Make models slightly transparent */
+}
+
+.orbital-model {
+  position: absolute;
+  top: var(--center-y);
+  left: var(--center-x);
+  transform-origin: center;
+  animation: orbit var(--orbit-duration) infinite linear;
+  animation-delay: calc(var(--orbit-duration) * var(--start-offset) / 360);
+  pointer-events: auto;
+  filter: drop-shadow(0 0 15px rgba(0, 0, 0, 0.15));
+  
+  /* Create a plane for the model that cancels orbit rotation */
+  transform-style: preserve-3d;
+}
+
+.model-container {
+  transform: translateX(-50%) translateY(-50%) rotateX(5deg);
+  transition: all 0.3s ease;
+  pointer-events: auto;
+  z-index: 2;
+  /* Keep the container frame oriented correctly */
+  animation: counter-orbit var(--orbit-duration) infinite linear;
+  animation-delay: calc(var(--orbit-duration) * var(--start-offset) / 360);
+}
+
+/* Make sure model-viewer has space to rotate within its container */
+model-viewer {
+  width: 100%;
+  height: 100%;
+  --poster-color: transparent;
+  background-color: transparent;
+  margin: 0;
+  padding: 0;
+  /* Hide all interaction UI elements */
+  --interaction-prompt-color: transparent;
+  --interaction-prompt-opacity: 0;
+  --interaction-prompt-scale: 0;
+  --progress-bar-color: transparent;
+  --progress-bar-height: 0px;
+  --progress-mask: none;
+  cursor: default !important;
+}
+
+/* Hide any remaining UI elements */
+model-viewer::part(default-progress-bar),
+model-viewer::part(default-ar-button),
+model-viewer::part(default-ar-prompt),
+model-viewer::part(default-error),
+model-viewer::part(default-interaction-prompt) {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+.orbital-model:hover .model-container {
+  transform: translateX(-50%) translateY(-50%) rotateX(5deg) scale(1.3);
+  opacity: 1;
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.7));
+}
+
+.orbital-model:hover {
+  z-index: 10;
+  opacity: 0.95;
+  animation-play-state: paused;
+}
+
+.orbital-model:hover .model-container {
+  animation-play-state: paused;
+}
+
+/* Don't pause the model-viewer auto-rotation on hover */
+.orbital-model:hover model-viewer {
+  animation-play-state: running;
+}
+
+@keyframes orbit {
+  from {
+    transform: rotate(var(--start-offset)) translateX(var(--orbit-size));
+  }
+  to {
+    transform: rotate(calc(360deg + var(--start-offset))) translateX(var(--orbit-size));
+  }
+}
+
+/* Counter-rotation to keep models upright */
+@keyframes counter-orbit {
+  from {
+    transform: translateX(-50%) translateY(-50%) rotateX(5deg) rotate(calc(-1 * var(--start-offset)));
+  }
+  to {
+    transform: translateX(-50%) translateY(-50%) rotateX(5deg) rotate(calc(-360deg - var(--start-offset)));
+  }
+}
+
+/* Make the wen model more visible */
+.model-wen-3 {
+  opacity: 0.95 !important; /* Override the default opacity */
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.7)) !important;
+  z-index: 5; /* Ensure it appears above other models */
+}
+
+/* Make the ni model more prominent */
+.model-ni-0 {
+  z-index: 6; /* Higher than wen model's z-index of 5 */
+  opacity: 1 !important; /* Full opacity */
+  filter: drop-shadow(0 0 25px rgba(29, 91, 225, 0.7)) !important;
+}
+
+.model-ni-0 model-viewer {
+  --poster-color: transparent;
+  background-color: transparent;
+}
+
+/* Make sure it scales nicely on hover */
+.model-ni-0:hover .model-container {
+  transform: translateX(-50%) translateY(-50%) rotateX(5deg) scale(1.15);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .orbital-model {
+    display: none;
+  }
+  
+  /* Show only first two models on mobile */
+  .orbital-model:nth-child(-n+2) {
+    display: block;
+  }
+} 
