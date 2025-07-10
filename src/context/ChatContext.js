@@ -32,6 +32,9 @@ export const ChatProvider = ({ children }) => {
   const conversationHistoryRef = useRef([]);
   const envApiKey = getOpenAIApiKey();
 
+  // Add a flag to track whether we've already processed a message for this recording session
+  const [messageProcessed, setMessageProcessed] = useState(false);
+
   // Initialize voices
   useEffect(() => {
     const loadVoices = async () => {
@@ -190,17 +193,20 @@ export const ChatProvider = ({ children }) => {
   const startVoiceRecording = () => {
     if (isRecording || !recognitionRef.current || interviewComplete) return;
     
+    // Reset the message processed flag at the start of recording
+    setMessageProcessed(false);
+    
     // Set recording state before starting the recording
     setIsRecording(true);
     
     startRecording(
       recognitionRef.current,
       (fullTranscript, confidence) => {
-        // Process the full transcript when manually stopped
-        if (fullTranscript && fullTranscript.trim()) {
-          // Check if the message isn't empty or just repetitive content
+        // Only process if not already processed and we have meaningful content
+        if (!messageProcessed && fullTranscript && fullTranscript.trim()) {
           const processedText = fullTranscript.trim();
           if (processedText.length > 0) {
+            setMessageProcessed(true); // Mark as processed
             sendMessage(processedText);
           }
         }
@@ -222,8 +228,19 @@ export const ChatProvider = ({ children }) => {
     // Prevent double stopping
     if (!isRecording) return;
     
-    stopRecording(recognitionRef.current);
+    // Get the transcript when stopping
+    const transcript = stopRecording(recognitionRef.current);
     setIsRecording(false);
+    
+    // Only process the transcript if we haven't already processed a message
+    if (!messageProcessed && transcript && transcript.trim()) {
+      const processedText = transcript.trim();
+      if (processedText.length > 0) {
+        console.log("Using transcript from voice recording:", processedText);
+        setMessageProcessed(true); // Mark as processed
+        sendMessage(processedText);
+      }
+    }
   };
 
   // Check if response indicates interview is complete

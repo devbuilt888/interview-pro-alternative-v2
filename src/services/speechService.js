@@ -114,7 +114,7 @@ export const initSpeechRecognition = () => {
   recognition.continuous = true; // Keep recording continuously
   recognition.interimResults = true; // Get interim results
   recognition.lang = getPreferredLanguage(); // Set to English
-  recognition.maxAlternatives = 1; // Only get best interpretation
+  recognition.maxAlternatives = 3; // Get multiple interpretations (increased from 1)
   
   console.log("Speech recognition initialized with language:", recognition.lang);
   
@@ -123,6 +123,8 @@ export const initSpeechRecognition = () => {
   recognition.manualStop = false;
   recognition.fullTranscript = ''; // Track the complete transcript during recording
   recognition.processedSegments = new Set(); // Track processed segments to avoid duplication
+  // Lower confidence threshold for accepting results
+  recognition.confidenceThreshold = 0.1; // Accept even low confidence results
   
   // Add event handlers
   recognition.onend = () => {
@@ -177,6 +179,11 @@ export const startRecording = (recognition, onResult, onError) => {
   
   // Handle results - both interim and final
   recognition.onresult = (event) => {
+    // Exit immediately if we're already processing a result or manually stopped
+    if (recognition.isProcessing || recognition.manualStop) {
+      return;
+    }
+    
     // Collect results from all speech segments
     let interimTranscript = '';
     let finalTranscript = '';
@@ -185,8 +192,8 @@ export const startRecording = (recognition, onResult, onError) => {
     // Get current time for debounce
     const now = Date.now();
     
-    // If we're already processing or it's too soon since the last result, skip
-    if (recognition.isProcessing || (now - recognition.lastResultTime < 800 && !recognition.manualStop)) {
+    // Reduced debounce time to process more frequent updates
+    if (now - recognition.lastResultTime < 300 && !recognition.manualStop) {
       return;
     }
     
@@ -194,9 +201,30 @@ export const startRecording = (recognition, onResult, onError) => {
     
     for (let i = 0; i < event.results.length; i++) {
       const result = event.results[i];
-      // We use the first (most likely) alternative
-      const transcript = result[0].transcript;
       
+      // Check all alternatives, not just the first one
+      let bestTranscript = '';
+      let highestConfidence = 0;
+      
+      // Look through all alternatives to find the best one
+      for (let j = 0; j < result.length; j++) {
+        const alternative = result[j];
+        const transcript = alternative.transcript;
+        const confidence = alternative.confidence || 0.01; // Default to very low confidence if not provided
+        
+        console.log(`Alternative ${j} - "${transcript}" (confidence: ${confidence})`);
+        
+        // Keep the highest confidence alternative
+        if (confidence > highestConfidence) {
+          highestConfidence = confidence;
+          bestTranscript = transcript;
+        }
+      }
+      
+      // Use the best transcript even if confidence is low
+      const transcript = bestTranscript;
+      
+      // Always process the segment if we haven't seen it before, regardless of confidence
       // Create a unique key for this segment
       const segmentKey = `${i}-${transcript}`;
       
@@ -210,8 +238,21 @@ export const startRecording = (recognition, onResult, onError) => {
           console.log("Added final segment:", transcript);
         }
       } else {
-        interimTranscript += transcript;
+        // Always include interim results - these help with catching partial phrases
+        interimTranscript += transcript + ' ';
         console.log("Interim segment:", transcript);
+        
+        // If we haven't had any final results in a while, treat this interim as useful
+        const timeSinceLastResult = now - recognition.lastResultTime;
+        if (timeSinceLastResult > 2000 && transcript.trim().length > 0) {
+          // Add this interim result to the full transcript if we haven't seen it
+          if (!recognition.processedSegments.has(segmentKey)) {
+            recognition.processedSegments.add(segmentKey);
+            recognition.fullTranscript += transcript + ' ';
+            newSegmentFound = true;
+            console.log("Added interim segment as useful content:", transcript);
+          }
+        }
       }
     }
     
@@ -278,18 +319,29 @@ export const startRecording = (recognition, onResult, onError) => {
 export const stopRecording = (recognition) => {
   if (!recognition) {
     console.error("Cannot stop recording - no recognition object");
-    return;
+    return '';
   }
   
   try {
-    // Set the manual stop flag to prevent auto-restart
+    // Set flags - IMPORTANT: manualStop must be set BEFORE stopping to prevent double processing
     recognition.manualStop = true;
     recognition.isListening = false;
     
+    // Copy the current transcript before stopping
+    const currentTranscript = recognition.fullTranscript ? recognition.fullTranscript.trim() : '';
+    
+    // Prevent further processing of results after stopping
+    recognition.isProcessing = true;
+    
     // Stop the recognition
     recognition.stop();
-    console.log("Speech recognition stopped, final transcript:", recognition.fullTranscript.trim());
+    console.log("Speech recognition stopped, final transcript:", currentTranscript);
+    
+    // Return whatever text we have, even if it's very partial
+    return currentTranscript;
   } catch (err) {
     console.error("Error stopping speech recognition:", err);
+    // Still return whatever text we have so far, even if there was an error
+    return recognition.fullTranscript ? recognition.fullTranscript.trim() : '';
   }
 }; 
