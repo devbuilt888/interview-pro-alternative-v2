@@ -2,30 +2,128 @@ import React, { useState, useEffect, useRef } from 'react';
 import TextInput from '../atoms/TextInput';
 import Button from '../atoms/Button';
 import { useChat } from '../../context/ChatContext';
+import useVoiceRecorder from '../../hooks/useVoiceRecorder';
 import './ChatFooter.css';
+
+// Utility to detect iOS/Safari
+function isIOSSafari() {
+  const ua = window.navigator.userAgent;
+  const isIOS = /iP(ad|hone|od)/.test(ua);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+  return isIOS || (isSafari && !window.MediaRecorder);
+}
+
+// Web Speech API hook for live transcription
+function useLiveSpeechRecognition(enabled) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognitionRef.current = recognition;
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      let final = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          final += result[0].transcript;
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+      setTranscript(final + interim);
+    };
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+    recognition.onerror = () => {
+      setIsRecording(false);
+    };
+    return () => {
+      recognition.stop();
+    };
+  }, [enabled]);
+
+  const start = () => {
+    if (recognitionRef.current && !isRecording) {
+      setTranscript('');
+      recognitionRef.current.start();
+      setIsRecording(true);
+    }
+  };
+  const stop = () => {
+    if (recognitionRef.current && isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+  const clear = () => setTranscript('');
+
+  return { isRecording, transcript, setTranscript, start, stop, clear };
+}
 
 const ChatFooter = ({ interviewComplete }) => {
   const [message, setMessage] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
   const [showDebug, setShowDebug] = useState(false);
   const recordingTimerRef = useRef(null);
-  
-  const { 
-    sendMessage, 
-    isLoading, 
-    isRecording, 
+  const fileInputRef = useRef(null);
+
+  const {
+    sendMessage,
+    isLoading,
     isSpeaking,
-    startVoiceRecording, 
-    stopVoiceRecording,
-    speakMessage,
     selectedVoice,
-    hasPdfContent
+    hasPdfContent,
+    speakMessage
   } = useChat();
 
-  // Handle recording timer
+  const {
+    isRecording: isMp3Recording,
+    transcript: mp3Transcript,
+    error: voiceError,
+    startRecording,
+    stopRecording,
+    setTranscript: setMp3Transcript
+  } = useVoiceRecorder();
+
+  const [isIOS, setIsIOS] = useState(false);
+  const [usingLive, setUsingLive] = useState(false);
+
+  // Live speech recognition (Web Speech API)
+  const liveSpeech = useLiveSpeechRecognition(!isIOS);
+
   useEffect(() => {
-    if (isRecording) {
-      // Start a timer to track recording duration
+    setIsIOS(isIOSSafari());
+  }, []);
+
+  // When using live speech, update message as user speaks
+  useEffect(() => {
+    if (!isIOS && usingLive && liveSpeech.transcript !== undefined) {
+      setMessage(liveSpeech.transcript);
+    }
+  }, [liveSpeech.transcript, isIOS, usingLive]);
+
+  // When using mp3/whisper, set message after transcription
+  useEffect(() => {
+    if (isIOS && mp3Transcript && !isLoading && !interviewComplete && hasPdfContent) {
+      setMessage(mp3Transcript);
+      setMp3Transcript && setMp3Transcript('');
+    }
+  }, [mp3Transcript, isIOS, isLoading, interviewComplete, hasPdfContent, setMp3Transcript]);
+
+  // Handle recording timer for mp3-recorder
+  useEffect(() => {
+    if (isMp3Recording || liveSpeech.isRecording) {
       setRecordingTime(0);
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
@@ -35,12 +133,8 @@ const ChatFooter = ({ interviewComplete }) => {
       clearInterval(recordingTimerRef.current);
       setRecordingTime(0);
     }
-    
-    // Cleanup on unmount
-    return () => {
-      clearInterval(recordingTimerRef.current);
-    };
-  }, [isRecording]);
+    return () => clearInterval(recordingTimerRef.current);
+  }, [isMp3Recording, liveSpeech.isRecording]);
 
   // Format recording time as minutes:seconds
   const formatRecordingTime = () => {
@@ -54,24 +148,55 @@ const ChatFooter = ({ interviewComplete }) => {
     if (message.trim() && !isLoading && !isSpeaking && !interviewComplete && hasPdfContent) {
       sendMessage(message);
       setMessage('');
+      liveSpeech.clear && liveSpeech.clear();
     }
   };
 
+  // Voice button handler
   const handleVoiceButton = () => {
     if (interviewComplete || !hasPdfContent) return;
-    
-    if (isRecording) {
-      stopVoiceRecording();
+    if (isIOS) {
+      // Open file input for iOS/Safari
+      fileInputRef.current && fileInputRef.current.click();
     } else {
-      startVoiceRecording();
+      if (liveSpeech.isRecording) {
+        liveSpeech.stop();
+        setUsingLive(false);
+      } else {
+        setUsingLive(true);
+        liveSpeech.start();
+      }
     }
+  };
+
+  // Handle file input change for iOS/Safari
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    // Send file to Whisper API (php/stt.php)
+    const formData = new FormData();
+    formData.append('audio', file);
+    try {
+      const response = await fetch('/php/stt.php', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.text) {
+        setMessage(result.text);
+      }
+    } catch (err) {
+      // Optionally handle error
+    }
+    // Reset file input
+    e.target.value = '';
   };
 
   // Prevent form submission while recording
   const onKeyDown = (e) => {
-    if (e.key === 'Enter' && isRecording) {
+    if (e.key === 'Enter' && (isMp3Recording || liveSpeech.isRecording)) {
       e.preventDefault();
-      stopVoiceRecording();
+      if (!isIOS && liveSpeech.isRecording) liveSpeech.stop();
     }
   };
 
@@ -82,7 +207,7 @@ const ChatFooter = ({ interviewComplete }) => {
       console.log("Testing audio with voice:", selectedVoice?.name || "default");
       speakMessage(testMessage);
     } catch (err) {
-      console.error("Audio test error:", err);
+      // Optionally handle error
     }
   };
 
@@ -132,9 +257,9 @@ const ChatFooter = ({ interviewComplete }) => {
   }
 
   // Check if we have a PDF uploaded
-  const inputDisabled = isRecording || isSpeaking || interviewComplete || !hasPdfContent;
+  const inputDisabled = isMp3Recording || liveSpeech.isRecording || isSpeaking || interviewComplete || !hasPdfContent;
   const buttonDisabled = !hasPdfContent || isSpeaking || interviewComplete;
-  const placeholder = isRecording 
+  const placeholder = (isMp3Recording || liveSpeech.isRecording)
     ? `Recording${recordingTime > 0 ? ` ${formatRecordingTime()}` : ''}... (click mic to stop)` 
     : interviewComplete 
       ? "Interview completed" 
@@ -149,14 +274,25 @@ const ChatFooter = ({ interviewComplete }) => {
           type="button"
           variant="outline" 
           size="small" 
-          className={`chat-footer-button ${isRecording ? 'recording' : ''}`}
+          className={`chat-footer-button ${(isMp3Recording || liveSpeech.isRecording) ? 'recording' : ''}`}
           onClick={handleVoiceButton}
           disabled={buttonDisabled} 
-          aria-label={isRecording ? "Stop recording" : "Start recording"}
-          title={!hasPdfContent ? "Upload a PDF to enable recording" : isRecording ? "Stop recording" : "Start recording"}
+          aria-label={(isMp3Recording || liveSpeech.isRecording) ? "Stop recording" : "Start recording"}
+          title={!hasPdfContent ? "Upload a PDF to enable recording" : (isMp3Recording || liveSpeech.isRecording) ? "Stop recording" : "Start recording"}
         >
-          <span className="footer-icon">{isRecording ? '⏹️' : '🎤'}</span>
+          <span className="footer-icon">{(isMp3Recording || liveSpeech.isRecording) ? '⏹️' : '🎤'}</span>
         </Button>
+        {/* iOS/Safari fallback file input */}
+        {isIOS && (
+          <input
+            type="file"
+            accept="audio/*"
+            capture
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+        )}
         <TextInput
           value={message}
           onChange={(e) => setMessage(e.target.value)}
@@ -165,12 +301,24 @@ const ChatFooter = ({ interviewComplete }) => {
           disabled={inputDisabled}
           onKeyDown={onKeyDown}
         />
+        {message && (
+          <Button
+            type="button"
+            variant="outline"
+            size="small"
+            className="chat-footer-debug"
+            onClick={() => setMessage('')}
+            title="Clear input"
+          >
+            <span className="footer-icon">✖️</span>
+          </Button>
+        )}
         <Button 
           type="submit" 
           variant="primary" 
           size="small"
           className="chat-footer-send"
-          disabled={!message.trim() || isLoading || buttonDisabled || isRecording}
+          disabled={!message.trim() || isLoading || buttonDisabled || isMp3Recording || liveSpeech.isRecording}
           title={!hasPdfContent ? "Upload a PDF to enable sending messages" : "Send message"}
         >
           <span className="footer-icon">➤</span>
@@ -186,7 +334,7 @@ const ChatFooter = ({ interviewComplete }) => {
           <span className="footer-icon">🛠️</span>
         </Button>
       </form>
-
+      
       {showDebug && (
         <div className="chat-debug-panel">
           <div className="debug-info">
